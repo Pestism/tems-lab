@@ -17,12 +17,19 @@ export default function ThroughputPanel({ d }: { d: Dashboard }) {
       </div>
 
       {hasSeries && (
-        <UPlotChart
-          data={[d.series.t, d.series.dl_mbps]}
-          series={[{ label: "Downlink", stroke: "#1f6feb" }]}
-          yLabel="Mbps"
-          height={240}
-        />
+        <div className="space-y-1">
+          <UPlotChart
+            data={[d.series.t, d.series.dl_mbps]}
+            series={[{ label: "Downlink", stroke: "#007afc", scale: "y" }]}
+            yLabel="Mbps"
+            height={240}
+            markMinMax
+          />
+          <p className="text-xs text-muted">
+            Dashed lines mark the peak and trough — read their values off the Mbps axis. Drag across the chart to
+            zoom; double-click to reset.
+          </p>
+        </div>
       )}
 
       {d.sessions.length > 0 && (
