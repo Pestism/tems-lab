@@ -39,7 +39,7 @@ function summaryOf(o: DashboardData["overview"]): HistorySummary {
   return {
     operator: o.operator,
     technology: o.technology,
-    maxDlMbps: o.maxDlMbps,
+    downloadBytes: o.downloadBytes,
     durationS: o.durationS,
     routePoints: o.routePoints,
     startUtc: o.startUtc,
@@ -261,12 +261,12 @@ export default function Page() {
       <footer className="mt-12 border-t border-line pt-4 text-xs text-muted">
         IK1330 local TRP parsing tool ·{" "}
         <a
-          href="https://www.kth.se/"
+          href="https://github.com/Pestism/tems-lab"
           target="_blank"
           rel="noopener noreferrer"
           className="underline hover:text-foreground"
         >
-          KTH
+          GitHub
         </a>
       </footer>
     </main>

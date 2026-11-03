@@ -26,7 +26,7 @@ describe("extract() dashboard", () => {
     const b20 = d.overview.lteBands.find((b) => b.band === 20)!;
     expect(b7.earfcn).toBe(3150);
     expect(b20.earfcn).toBe(6300);
-    expect(d.overview.maxDlMbps).toBeGreaterThan(300);
+    expect(d.overview.downloadBytes).toBeGreaterThan(0);
   });
 
   it("produces aligned time series and route points", () => {

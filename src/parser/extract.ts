@@ -41,7 +41,7 @@ export type Dashboard = {
     durationS: number;
     lteBands: BandInfo[];
     nrBands: BandInfo[];
-    maxDlMbps: number | null;
+    downloadBytes: number | null;
     meanRsrp: number | null;
     medianRsrp: number | null;
     downloads: number;
@@ -205,8 +205,6 @@ export function extract(input: Trp | Trp[], interval = 1): Dashboard {
   const rsrpVals = S("rsrp").v.filter((v): v is DV => v !== null && v.k !== "s").map((v) => (v as { n: number }).n);
   rsrpVals.sort((a, b) => a - b);
   const median = rsrpVals.length ? rsrpVals[rsrpVals.length >> 1] : null;
-  const dlVals = S("dl_kbps").v.filter((v): v is DV => v !== null && v.k !== "s").map((v) => (v as { n: number }).n);
-  const maxDl = dlVals.length ? Math.max(...dlVals) / 1000 : null;
 
   const mcc = num(whole("mcc"));
   const mnc = num(whole("mnc"));
@@ -299,7 +297,7 @@ export function extract(input: Trp | Trp[], interval = 1): Dashboard {
       durationS: Math.round((t1 - t0) * 10) / 10,
       lteBands,
       nrBands,
-      maxDlMbps: maxDl === null ? null : Math.round(maxDl * 10) / 10,
+      downloadBytes: sessions.reduce((n, s) => n + (s.payloadBytes ?? 0), 0) || null,
       meanRsrp: round1(num(whole("rsrp"))),
       medianRsrp: round1(median),
       downloads: sessions.length,

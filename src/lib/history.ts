@@ -3,7 +3,7 @@
 export type HistorySummary = {
   operator: string | null;
   technology: string | null;
-  maxDlMbps: number | null;
+  downloadBytes: number | null;
   durationS: number;
   routePoints: number;
   startUtc: string;

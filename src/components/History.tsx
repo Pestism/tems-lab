@@ -43,7 +43,7 @@ export default function History({
               <div className="truncate text-sm font-medium hover:text-brand">{m.name}</div>
               <div className="truncate text-xs text-muted">
                 {when(m.createdAt)} · {[m.summary.operator, m.summary.technology].filter(Boolean).join(" · ") || "—"}
-                {m.summary.maxDlMbps != null && ` · max ${num(m.summary.maxDlMbps)} Mbps`}
+                {m.summary.downloadBytes != null && ` · ${bytes(m.summary.downloadBytes)}`}
                 {m.summary.durationS ? ` · ${num(m.summary.durationS, 0)} s` : ""} · {bytes(m.size)}
               </div>
             </button>
@@ -58,8 +58,7 @@ export default function History({
         ))}
       </ul>
       <p className="mt-3 text-xs text-muted">
-        Stored only in this browser and removed automatically after 6 months — nothing is uploaded. On a
-        shared computer, use <span className="font-medium">Clear all</span> when you are done.
+        All data is decoded and stored locally. Your sessions are automatically removed after six months
       </p>
     </section>
   );

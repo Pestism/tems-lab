@@ -1,19 +1,18 @@
 "use client";
 import type { Dashboard } from "@/parser/extract";
 import UPlotChart from "./UPlotChart";
-import { num } from "@/lib/format";
+import { num, bytes } from "@/lib/format";
 
 export default function ThroughputPanel({ d }: { d: Dashboard }) {
   const hasSeries = d.seriesMeta.some((m) => m.key === "dl_mbps");
-  const maxDl = d.overview.maxDlMbps;
   const sessMax = Math.max(1, ...d.sessions.map((s) => (s.throughputKbps ?? 0) / 1000));
 
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1 text-sm">
         <div>
-          <span className="text-muted">Max downlink throughput: </span>
-          <span className="font-semibold">{num(maxDl, 1, " Mbps")}</span>
+          <span className="text-muted">Data downloaded: </span>
+          <span className="font-semibold">{bytes(d.overview.downloadBytes)}</span>
         </div>
       </div>
 
