@@ -42,10 +42,7 @@ export default function Dropzone({ onFiles, disabled }: { onFiles: (f: File[]) =
         📡
       </div>
       <div className="text-lg font-semibold">Drop your TEMS <code>.trp</code> logfile here</div>
-      <div className="text-sm text-muted">or click to choose — drop several if one run split into parts</div>
-      <div className="mt-2 max-w-md text-xs text-muted">
-        Your file is decoded entirely in this browser — it is never uploaded to any server.
-      </div>
+      <div className="text-sm text-muted">or click to choose. You may drop several files to be parsed</div>
     </div>
   );
 }

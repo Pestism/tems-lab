@@ -83,7 +83,6 @@ export default function SessionsTable({ d }: { d: Dashboard }) {
           ))}
         </tbody>
       </table>
-      <p className="mt-3 text-xs text-muted">Click a session to see its per-second readings.</p>
 
       {open !== null && d.sessions[open] && (
         <SessionModal
