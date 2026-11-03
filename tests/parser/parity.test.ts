@@ -9,7 +9,7 @@ const fx = join(here, "..", "fixtures");
 
 function rows(csv: string): string[][] {
   return csv
-    .split("\r\n")
+    .split(/\r?\n/)
     .filter((l) => l.length)
     .map((l) => splitCsv(l));
 }
@@ -73,5 +73,10 @@ describe("TS parser matches Python golden output", () => {
 
   it("per-session CSV matches golden_1s_sessions.csv", () => {
     compare("sessions", sessions, "golden_1s_sessions.csv");
+  });
+
+  it("emits CRLF line endings", () => {
+    expect(main.includes("\r\n")).toBe(true);
+    expect(main.replace(/\r\n/g, "").includes("\n")).toBe(false);
   });
 });
