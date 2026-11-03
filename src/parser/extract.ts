@@ -65,6 +65,7 @@ const CHART_METRICS: { key: string; label: string; unit: string; group: string; 
   { key: "nr_rsrq", label: "NR SS-RSRQ", unit: "dB", group: "NR", db: true },
   { key: "nr_sinr", label: "NR SS-SINR", unit: "dB", group: "NR", db: true },
   { key: "dl_mbps", label: "Downlink throughput", unit: "Mbps", group: "Throughput" },
+  { key: "ul_mbps", label: "Uplink throughput", unit: "Mbps", group: "Throughput" },
 ];
 
 const RADIO_IES: Record<string, string[]> = {
@@ -116,7 +117,7 @@ export function extract(input: Trp | Trp[], interval = 1): Dashboard {
     "technology", "operator", "mcc", "mnc", "band", "earfcn", "pci",
     "nr_band", "nr_arfcn", "nr_pci",
     "rsrp", "rsrq", "sinr", "rssi", "nr_rsrp", "nr_rsrq", "nr_sinr",
-    "dl_kbps", "lat", "lon", "speed",
+    "dl_kbps", "ul_kbps", "lat", "lon", "speed",
   ];
   const cols = specs.map((s) => new Column(s));
   const radioCols: Record<string, Column> = {};
@@ -152,10 +153,11 @@ export function extract(input: Trp | Trp[], interval = 1): Dashboard {
   for (let b = Math.floor(t0 / interval) * interval; b <= t1; b += interval) {
     t.push(Math.round((b - t0) * 1000) / 1000);
     for (const m of CHART_METRICS) {
-      const src = m.key === "dl_mbps" ? "dl_kbps" : m.key;
+      const mbps = m.key === "dl_mbps" || m.key === "ul_mbps";
+      const src = m.key === "dl_mbps" ? "dl_kbps" : m.key === "ul_mbps" ? "ul_kbps" : m.key;
       const c = col(src);
       const v = num(span(series.get(c)!, b, Math.min(b + interval, t1 + 1e-9), c));
-      out[m.key].push(v === null ? null : m.key === "dl_mbps" ? v / 1000 : v);
+      out[m.key].push(v === null ? null : mbps ? v / 1000 : v);
     }
   }
   const seriesOut: Dashboard["series"] = { t };

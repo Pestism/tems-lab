@@ -28,17 +28,29 @@ export default function SignalCharts({ d }: { d: Dashboard }) {
   );
 
   return (
-    <div className="grid gap-6 lg:grid-cols-2">
+    <div className="space-y-3">
+      <div className="grid gap-6 lg:grid-cols-2">
       {groups.map((g) => {
         const data: (number | null)[][] = [d.series.t, ...g.keys.map((k) => d.series[k])];
-        const series: ChartSeries[] = g.keys.map((k) => ({ label: label(k), stroke: COLORS[k] ?? "#1f6feb" }));
+        const series: ChartSeries[] = g.keys.map((k) => ({ label: label(k), stroke: COLORS[k] ?? "#1f6feb", scale: "y" }));
         return (
           <div key={g.title}>
             <div className="mb-1 text-sm font-medium">{g.title}</div>
-            <UPlotChart data={data} series={series} yLabel={g.unit} height={240} />
+            <UPlotChart
+              data={data}
+              series={series}
+              yLabel={g.unit}
+              height={240}
+              minMaxSeries={g.keys.map((_, i) => i + 1)}
+            />
           </div>
         );
       })}
+      </div>
+      <p className="text-xs text-muted">
+        Dashed lines mark each metric&apos;s max and min — read values off the axis. Drag across a chart to zoom;
+        double-click to reset.
+      </p>
     </div>
   );
 }

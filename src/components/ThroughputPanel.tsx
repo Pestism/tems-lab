@@ -5,7 +5,15 @@ import { num, bytes } from "@/lib/format";
 
 export default function ThroughputPanel({ d }: { d: Dashboard }) {
   const hasSeries = d.seriesMeta.some((m) => m.key === "dl_mbps");
+  const hasUl = d.seriesMeta.some((m) => m.key === "ul_mbps");
   const sessMax = Math.max(1, ...d.sessions.map((s) => (s.throughputKbps ?? 0) / 1000));
+  const chartData = hasUl ? [d.series.t, d.series.dl_mbps, d.series.ul_mbps] : [d.series.t, d.series.dl_mbps];
+  const chartSeries = hasUl
+    ? [
+        { label: "Downlink", stroke: "#007afc", scale: "y" },
+        { label: "Uplink", stroke: "#16a34a", scale: "y" },
+      ]
+    : [{ label: "Downlink", stroke: "#007afc", scale: "y" }];
 
   return (
     <div className="space-y-5">
@@ -18,16 +26,10 @@ export default function ThroughputPanel({ d }: { d: Dashboard }) {
 
       {hasSeries && (
         <div className="space-y-1">
-          <UPlotChart
-            data={[d.series.t, d.series.dl_mbps]}
-            series={[{ label: "Downlink", stroke: "#007afc", scale: "y" }]}
-            yLabel="Mbps"
-            height={240}
-            markMinMax
-          />
+          <UPlotChart data={chartData} series={chartSeries} yLabel="Mbps" height={240} minMaxSeries={[1]} />
           <p className="text-xs text-muted">
-            Dashed lines mark the peak and trough — read their values off the Mbps axis. Drag across the chart to
-            zoom; double-click to reset.
+            Dashed lines mark the downlink peak and trough — read their values off the Mbps axis.
+            {hasUl ? " Uplink is the green line." : ""} Drag across the chart to zoom; double-click to reset.
           </p>
         </div>
       )}
