@@ -276,7 +276,7 @@ export default function Page() {
   const onClear = useCallback(() => clearAll().then(refreshHistory), [refreshHistory]);
 
   return (
-    <main className="mx-auto max-w-5xl px-4 py-8 sm:py-12">
+    <main className="mx-auto w-full max-w-screen-2xl px-4 py-8 sm:px-6 sm:py-12 lg:px-8">
       <header className="mb-8">
         <h1 className="text-2xl font-bold tracking-tight">TEMS Lab Analyzer</h1>
         <p className="mt-1 max-w-2xl text-sm text-muted">
