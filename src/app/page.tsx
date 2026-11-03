@@ -22,18 +22,37 @@ import {
   type HistorySummary,
 } from "@/lib/history";
 
-type Parsed = { name: string; size: number; buffer: ArrayBuffer; dashboard: DashboardData };
+type Parsed = { name: string; size: number; buffer: ArrayBuffer; dashboard: DashboardData; id: string | null };
 type View = { name: string; data: DashboardData };
+type Src = { files: { id: string; name: string }[]; combined: boolean };
 
 type State =
   | { s: "idle" }
   | { s: "parsing"; phase: string }
   | { s: "choose"; parts: Parsed[]; group: number[] }
-  | { s: "done"; views: View[]; active: number }
+  | { s: "done"; views: View[]; active: number; src?: Src }
   | { s: "error"; message: string };
 
 const MAX_AGE_MS = 180 * 24 * 60 * 60 * 1000;
 const MAX_SIZE = 200 * 1024 * 1024;
+const LAST_VIEW_KEY = "tems:lastView";
+
+type LastView = Src & { active: number };
+function saveLastView(lv: LastView) {
+  try {
+    localStorage.setItem(LAST_VIEW_KEY, JSON.stringify(lv));
+  } catch {}
+}
+function clearLastView() {
+  try {
+    localStorage.removeItem(LAST_VIEW_KEY);
+  } catch {}
+}
+function srcOf(parts: Parsed[]): Src | undefined {
+  return parts.every((p) => p.id)
+    ? { files: parts.map((p) => ({ id: p.id!, name: p.name })), combined: false }
+    : undefined;
+}
 
 function summaryOf(o: DashboardData["overview"]): HistorySummary {
   return {
@@ -57,11 +76,6 @@ export default function Page() {
   const refreshHistory = useCallback(() => {
     listMeta().then(setHistory).catch(() => { });
   }, []);
-
-  useEffect(() => {
-    requestPersist();
-    purgeExpired(MAX_AGE_MS).finally(refreshHistory);
-  }, [refreshHistory]);
 
   const parse = useCallback(
     (files: WorkerFile[]): Promise<{ dashboard: DashboardData; parseMs: number }> =>
@@ -100,9 +114,54 @@ export default function Page() {
     track({ event: "parse_failed", errorClass: err instanceof Error ? err.name : "Error" });
   }, []);
 
+  const restoreLast = useCallback(async () => {
+    let lv: LastView | null = null;
+    try {
+      const raw = localStorage.getItem(LAST_VIEW_KEY);
+      if (raw) lv = JSON.parse(raw) as LastView;
+    } catch {}
+    if (!lv?.files?.length) return;
+    setState({ s: "parsing", phase: "Restoring your last file" });
+    const files = lv.files;
+    const datas = await Promise.all(files.map((f) => getData(f.id)));
+    if (datas.some((d) => !d)) {
+      clearLastView();
+      setState({ s: "idle" });
+      return;
+    }
+    try {
+      if (lv.combined && files.length > 1) {
+        const { dashboard } = await parse(files.map((f, i) => ({ buffer: datas[i]!, name: f.name })));
+        setState({ s: "done", views: [{ name: `${files.length} files · combined`, data: dashboard }], active: 0, src: { files, combined: true } });
+      } else {
+        const views: View[] = [];
+        for (let i = 0; i < files.length; i++) {
+          const { dashboard } = await parse([{ buffer: datas[i]!, name: files[i].name }]);
+          views.push({ name: files[i].name, data: dashboard });
+        }
+        setState({ s: "done", views, active: Math.min(lv.active || 0, views.length - 1), src: { files, combined: false } });
+      }
+      files.forEach((f) => touch(f.id));
+    } catch {
+      clearLastView();
+      setState({ s: "idle" });
+    }
+  }, [parse]);
+
+  useEffect(() => {
+    requestPersist();
+    restoreLast();
+    purgeExpired(MAX_AGE_MS).finally(refreshHistory);
+  }, [refreshHistory, restoreLast]);
+
+  useEffect(() => {
+    if (state.s === "done" && state.src) saveLastView({ ...state.src, active: state.active });
+  }, [state]);
+
   const reset = useCallback(() => {
     workerRef.current?.terminate();
     workerRef.current = null;
+    clearLastView();
     setStaged([]);
     setState({ s: "idle" });
     refreshHistory();
@@ -120,14 +179,14 @@ export default function Page() {
           const buf = await f.arrayBuffer();
           const keep = buf.slice(0);
           const { dashboard, parseMs } = await parse([{ buffer: buf, name: f.name }]);
-          parts.push({ name: f.name, size: f.size, buffer: keep, dashboard });
           track({ event: "parse_succeeded", parseMs, sizeBucket: sizeBucket(f.size), panels: dashboard.panels });
-          await saveFile(keep, f.name, summaryOf(dashboard.overview));
+          const meta = await saveFile(keep, f.name, summaryOf(dashboard.overview));
+          parts.push({ name: f.name, size: f.size, buffer: keep, dashboard, id: meta?.id ?? null });
         }
         refreshHistory();
 
         if (parts.length === 1) {
-          setState({ s: "done", views: asViews(parts), active: 0 });
+          setState({ s: "done", views: asViews(parts), active: 0, src: srcOf(parts) });
           return;
         }
         const fparts: FilePart[] = parts.map((p, i) => ({
@@ -139,7 +198,7 @@ export default function Page() {
         }));
         const group = sameSessionGroups(fparts).find((g) => g.length > 1);
         if (group) setState({ s: "choose", parts, group });
-        else setState({ s: "done", views: asViews(parts), active: 0 });
+        else setState({ s: "done", views: asViews(parts), active: 0, src: srcOf(parts) });
       } catch (err) {
         fail(err);
       }
@@ -174,7 +233,11 @@ export default function Page() {
         const totalSize = group.reduce((n, i) => n + parts[i].size, 0);
         const { dashboard, parseMs } = await parse(files);
         track({ event: "parse_succeeded", parseMs, sizeBucket: sizeBucket(totalSize), panels: dashboard.panels });
-        setState({ s: "done", views: [{ name: `${group.length} files · combined`, data: dashboard }], active: 0 });
+        const grp = group.map((i) => parts[i]);
+        const src: Src | undefined = grp.every((p) => p.id)
+          ? { files: grp.map((p) => ({ id: p.id!, name: p.name })), combined: true }
+          : undefined;
+        setState({ s: "done", views: [{ name: `${group.length} files · combined`, data: dashboard }], active: 0, src });
       } catch (err) {
         fail(err);
       }
@@ -194,7 +257,7 @@ export default function Page() {
         setState({ s: "parsing", phase: "Reading file" });
         try {
           const { dashboard } = await parse([{ buffer: data, name: m.name }]);
-          setState({ s: "done", views: [{ name: m.name, data: dashboard }], active: 0 });
+          setState({ s: "done", views: [{ name: m.name, data: dashboard }], active: 0, src: { files: [{ id: m.id, name: m.name }], combined: false } });
         } catch (err) {
           fail(err);
         }
@@ -223,7 +286,7 @@ export default function Page() {
               {state.views.map((v, i) => (
                 <button
                   key={`${v.name}-${i}`}
-                  onClick={() => setState({ s: "done", views: state.views, active: i })}
+                  onClick={() => setState({ ...state, active: i })}
                   className={`max-w-[16rem] truncate rounded-lg border px-3 py-1.5 text-xs ${i === state.active ? "border-brand font-medium text-brand" : "border-line text-muted hover:text-ink"
                     }`}
                 >
@@ -240,7 +303,7 @@ export default function Page() {
         <SessionChoice
           state={state}
           onCombine={combine}
-          onSeparate={(p) => setState({ s: "done", views: asViews(p), active: 0 })}
+          onSeparate={(p) => setState({ s: "done", views: asViews(p), active: 0, src: srcOf(p) })}
         />
       ) : (
         <div className="space-y-4">

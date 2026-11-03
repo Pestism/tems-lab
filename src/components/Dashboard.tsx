@@ -42,8 +42,20 @@ export default function Dashboard({ d, onReset }: { d: DashboardData; onReset: (
     return t;
   }, [d.panels]);
 
-  const [active, setActive] = useState("overview");
+  const [active, setActive] = useState<string>(() => {
+    try {
+      return localStorage.getItem("tems:tab") || "overview";
+    } catch {
+      return "overview";
+    }
+  });
   const tab = tabs.find((t) => t.id === active) ?? tabs[0];
+  const choose = (id: string) => {
+    setActive(id);
+    try {
+      localStorage.setItem("tems:tab", id);
+    } catch {}
+  };
 
   return (
     <div className="space-y-4">
@@ -64,7 +76,7 @@ export default function Dashboard({ d, onReset }: { d: DashboardData; onReset: (
         {tabs.map((t) => (
           <button
             key={t.id}
-            onClick={() => setActive(t.id)}
+            onClick={() => choose(t.id)}
             className={`-mb-px rounded-t-lg border-b-2 px-3 py-2 text-sm ${
               active === t.id ? "border-brand font-medium text-ink" : "border-transparent text-muted hover:text-ink"
             }`}
