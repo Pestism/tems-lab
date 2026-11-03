@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import Dropzone from "@/components/Dropzone";
 import ProgressBar from "@/components/ProgressBar";
 import Dashboard from "@/components/Dashboard";
@@ -36,6 +36,7 @@ type State =
 const MAX_AGE_MS = 180 * 24 * 60 * 60 * 1000;
 const MAX_SIZE = 200 * 1024 * 1024;
 const LAST_VIEW_KEY = "tems:lastView";
+const useIsoLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
 
 type LastView = Src & { active: number };
 function saveLastView(lv: LastView) {
@@ -71,6 +72,7 @@ export default function Page() {
   const [state, setState] = useState<State>({ s: "idle" });
   const [staged, setStaged] = useState<File[]>([]);
   const [history, setHistory] = useState<HistoryMeta[]>([]);
+  const [mounted, setMounted] = useState(false);
   const workerRef = useRef<Worker | null>(null);
 
   const refreshHistory = useCallback(() => {
@@ -78,13 +80,13 @@ export default function Page() {
   }, []);
 
   const parse = useCallback(
-    (files: WorkerFile[]): Promise<{ dashboard: DashboardData; parseMs: number }> =>
+    (files: WorkerFile[], fixedPhase?: string): Promise<{ dashboard: DashboardData; parseMs: number }> =>
       new Promise((resolve, reject) => {
         const worker = new Worker(new URL("../parser/worker.ts", import.meta.url), { type: "module" });
         workerRef.current = worker;
         worker.onmessage = (e: MessageEvent<WorkerOut>) => {
           const m = e.data;
-          if (m.type === "progress") setState({ s: "parsing", phase: m.phase });
+          if (m.type === "progress") setState({ s: "parsing", phase: fixedPhase ?? m.phase });
           else if (m.type === "done") {
             worker.terminate();
             workerRef.current = null;
@@ -131,12 +133,12 @@ export default function Page() {
     }
     try {
       if (lv.combined && files.length > 1) {
-        const { dashboard } = await parse(files.map((f, i) => ({ buffer: datas[i]!, name: f.name })));
+        const { dashboard } = await parse(files.map((f, i) => ({ buffer: datas[i]!, name: f.name })), "Restoring your last file");
         setState({ s: "done", views: [{ name: `${files.length} files · combined`, data: dashboard }], active: 0, src: { files, combined: true } });
       } else {
         const views: View[] = [];
         for (let i = 0; i < files.length; i++) {
-          const { dashboard } = await parse([{ buffer: datas[i]!, name: files[i].name }]);
+          const { dashboard } = await parse([{ buffer: datas[i]!, name: files[i].name }], "Restoring your last file");
           views.push({ name: files[i].name, data: dashboard });
         }
         setState({ s: "done", views, active: Math.min(lv.active || 0, views.length - 1), src: { files, combined: false } });
@@ -148,11 +150,15 @@ export default function Page() {
     }
   }, [parse]);
 
+  useIsoLayoutEffect(() => {
+    setMounted(true);
+    void restoreLast();
+  }, [restoreLast]);
+
   useEffect(() => {
     requestPersist();
-    restoreLast();
     purgeExpired(MAX_AGE_MS).finally(refreshHistory);
-  }, [refreshHistory, restoreLast]);
+  }, [refreshHistory]);
 
   useEffect(() => {
     if (state.s === "done" && state.src) saveLastView({ ...state.src, active: state.active });
@@ -279,7 +285,9 @@ export default function Page() {
         </p>
       </header>
 
-      {state.s === "done" ? (
+      {!mounted ? (
+        <ProgressBar phase="Loading" />
+      ) : state.s === "done" ? (
         <div className="space-y-3">
           {state.views.length > 1 && (
             <div className="flex flex-wrap gap-1">
