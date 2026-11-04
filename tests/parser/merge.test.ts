@@ -58,7 +58,7 @@ describe("sameSessionGroups", () => {
   });
 
   it("orders by start time and tolerates overlap", () => {
-    const parts = [p(1, 1150, 1400), p(0, 1000, 1200)]; // overlapping, out of order
+    const parts = [p(1, 1150, 1400), p(0, 1000, 1200)]; 
     expect(sameSessionGroups(parts)).toEqual([[0, 1]]);
   });
 });
