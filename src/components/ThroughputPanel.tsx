@@ -27,10 +27,7 @@ export default function ThroughputPanel({ d }: { d: Dashboard }) {
       {hasSeries && (
         <div className="space-y-1">
           <UPlotChart data={chartData} series={chartSeries} yLabel="Mbps" height={240} minMaxSeries={[1]} />
-          <p className="text-xs text-muted">
-            Dashed lines mark the downlink peak and trough — read their values off the Mbps axis.
-            {hasUl ? " Uplink is the green line." : ""} Drag across the chart to zoom; double-click to reset.
-          </p>
+          <p className="text-xs text-muted">Drag across the chart to zoom; double-click to reset.</p>
         </div>
       )}
 
