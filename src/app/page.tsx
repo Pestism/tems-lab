@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import Image from "next/image";
 import Dropzone from "@/components/Dropzone";
 import ProgressBar from "@/components/ProgressBar";
 import Dashboard from "@/components/Dashboard";
@@ -278,8 +279,11 @@ export default function Page() {
   return (
     <main className="mx-auto w-full max-w-screen-2xl px-4 py-8 sm:px-6 sm:py-12 lg:px-8">
       <header className="mb-8">
-        <h1 className="text-2xl font-bold tracking-tight">TEMS Lab Analyzer</h1>
-        <p className="mt-1 max-w-2xl text-sm text-muted">
+        <div className="flex items-center gap-3">
+          <Image src="/logo.png" alt="" width={431} height={372} priority className="h-10 w-auto" />
+          <h1 className="text-2xl font-bold tracking-tight">TEMS Lab Analyzer</h1>
+        </div>
+        <p className="mt-2 max-w-2xl text-sm text-muted">
           Open a TEMS <code>.trp</code> logfile to view coverage, signal, throughput and radio
           parameters.
         </p>
