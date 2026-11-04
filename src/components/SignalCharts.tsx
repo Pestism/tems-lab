@@ -48,7 +48,7 @@ export default function SignalCharts({ d }: { d: Dashboard }) {
       })}
       </div>
       <p className="text-xs text-muted">
-        Dashed lines mark each metric&apos;s max and min — read values off the axis. Drag across a chart to zoom;
+        Read values off the axis. Drag across a chart to zoom;
         double-click to reset.
       </p>
     </div>
