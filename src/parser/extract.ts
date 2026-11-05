@@ -27,6 +27,18 @@ export type SessionInfo = {
 
 export type RadioParam = { label: string; lte: string | null; nr: string | null };
 
+export type CarrierInfo = {
+  label: string;
+  band: number | null;
+  earfcn: number | null;
+  freqMHz: number | null;
+  bandwidth: string | null;
+  pci: number | null;
+  meanMbps: number | null;
+  maxMbps: number | null;
+  seriesKey: string;
+};
+
 export type NeighborInfo = {
   rat: string;
   pci: number;
@@ -65,6 +77,8 @@ export type Dashboard = {
   route: { lat: number; lon: number; rsrp: number | null }[];
   handovers: { t: number; utc: string; label: string; lat: number | null; lon: number | null }[];
   neighbors: NeighborInfo[];
+  carriers: CarrierInfo[];
+  caDegree: number | null;
   radio: RadioParam[];
   sessions: SessionInfo[];
   panels: string[];
@@ -162,7 +176,30 @@ export function extract(input: Trp | Trp[], interval = 1): Dashboard {
       rsrq: mkNb(g.rsrq, i),
     }))
   );
-  const all = [...cols, ...Object.values(radioCols), ...nbCols.flatMap((x) => [x.pci, x.chan, x.rsrp, x.rsrq])];
+  const CC_N = 5;
+  const CC_IES = {
+    band: "Radio.Lte.ServingCell[8].Band",
+    earfcn: "Radio.Lte.ServingCell[8].Downlink.Earfcn",
+    bw: "Radio.Lte.ServingCell[8].Downlink.Bandwidth",
+    pci: "Radio.Lte.ServingCell[8].Pci",
+    mac: "Radio.Lte.ServingCell[8].Mac.Downlink.Throughput",
+  };
+  const ccCols = Array.from({ length: CC_N }, (_, i) => ({
+    i,
+    band: mkNb(CC_IES.band, i),
+    earfcn: mkNb(CC_IES.earfcn, i),
+    bw: mkNb(CC_IES.bw, i),
+    pci: mkNb(CC_IES.pci, i),
+    mac: mkNb(CC_IES.mac, i),
+  }));
+  const caCountCol = mkNb("Radio.Lte.ServingCellCount", 0);
+  const all = [
+    ...cols,
+    ...Object.values(radioCols),
+    ...nbCols.flatMap((x) => [x.pci, x.chan, x.rsrp, x.rsrq]),
+    ...ccCols.flatMap((x) => [x.band, x.earfcn, x.bw, x.pci, x.mac]),
+    caCountCol,
+  ];
   let tFirst: number | null = null;
   let tLast: number | null = null;
   const evAll: [number, string][] = [];
@@ -338,6 +375,44 @@ export function extract(input: Trp | Trp[], interval = 1): Dashboard {
     })
     .sort((a, b) => (b.rsrpMean ?? -999) - (a.rsrpMean ?? -999));
 
+  // LTE carrier aggregation: per-component-carrier params + MAC throughput
+  const modeVal = (c: Column) => aggregate(series.get(c)!.window(t0, t1 + 1e-9), "mode", false, false);
+  const carriers: CarrierInfo[] = [];
+  for (const cc of ccCols) {
+    const bandSer = series.get(cc.band)!;
+    if (!bandSer.v.some((v) => v != null)) continue;
+    const band = bandNum(modeVal(cc.band));
+    const earfcn = num(modeVal(cc.earfcn));
+    const pci = num(modeVal(cc.pci));
+    // drop unphysical spikes (> 250 Mbps on one LTE CC is a bad sample)
+    const macRaw = series.get(cc.mac)!;
+    const macSer = new Series();
+    for (let k = 0; k < macRaw.t.length; k++) {
+      const v = macRaw.v[k];
+      macSer.add(macRaw.t[k], v && v.k !== "s" && v.n / 1000 > 250 ? null : v);
+    }
+    const key = `cc${cc.i}_mbps`;
+    const arr: (number | null)[] = [];
+    for (let b = Math.floor(t0 / interval) * interval; b <= t1; b += interval) {
+      const v = num(aggregate(macSer.window(b, Math.min(b + interval, t1 + 1e-9)), "mean", false, false));
+      arr.push(v === null ? null : Math.round((v / 1000) * 100) / 100);
+    }
+    seriesOut[key] = arr;
+    const macVals = macSer.v.filter((v): v is DV => v != null && v.k !== "s").map((v) => (v as { n: number }).n);
+    carriers.push({
+      label: cc.i === 0 ? "PCell" : `SCell${cc.i}`,
+      band,
+      earfcn,
+      freqMHz: band != null && earfcn != null ? lteDownlinkMHzForBand(band, earfcn) : earfcn != null ? lteDownlinkMHz(earfcn) : null,
+      bandwidth: fmtBw(str(modeVal(cc.bw))),
+      pci,
+      meanMbps: macVals.length ? round1(macVals.reduce((a, b) => a + b, 0) / macVals.length / 1000) : null,
+      maxMbps: macVals.length ? round1(Math.max(...macVals) / 1000) : null,
+      seriesKey: key,
+    });
+  }
+  const caDegree = series.get(caCountCol)!.v.reduce((m: number, v) => (v && v.k !== "s" ? Math.max(m, v.n) : m), 0) || null;
+
   // radio params table
   const rp = (k: string) => str(aggregate(series.get(radioCols[k])!.window(t0, t1 + 1e-9), "mode", false, false));
   const lteB = bandShare("band", "earfcn", false);
@@ -393,6 +468,7 @@ export function extract(input: Trp | Trp[], interval = 1): Dashboard {
   if (seriesMeta.some((m) => m.group === "LTE" || m.group === "NR")) panels.push("signal");
   if (seriesMeta.some((m) => m.group === "Throughput") || sessions.length) panels.push("throughput");
   if (radio.length) panels.push("radio");
+  if (carriers.length >= 2) panels.push("carriers");
   if (neighbors.length) panels.push("neighbors");
   if (sessions.length) panels.push("sessions");
 
@@ -423,6 +499,8 @@ export function extract(input: Trp | Trp[], interval = 1): Dashboard {
     route,
     handovers,
     neighbors,
+    carriers,
+    caDegree,
     radio,
     sessions,
     panels,
