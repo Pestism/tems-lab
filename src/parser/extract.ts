@@ -46,6 +46,12 @@ export type NeighborInfo = {
   band: number | null;
   freqMHz: number | null;
   samples: number;
+  firstSeen: number;
+  lastSeen: number;
+  firstUtc: string;
+  lastUtc: string;
+  sessionIndex: number;
+  sessionLabel: string;
   rsrpMin: number | null;
   rsrpMean: number | null;
   rsrpMax: number | null;
@@ -226,6 +232,32 @@ export function extract(input: Trp | Trp[], interval = 1): Dashboard {
     return r.series;
   });
   const series = parts.length === 1 ? parts[0] : mergeSeries(parts, all);
+  const fileWindows = parts
+    .map((p, i) => {
+      let lo = Infinity;
+      let hi = -Infinity;
+      for (const s of p.values()) {
+        if (!s.t.length) continue;
+        if (s.t[0] < lo) lo = s.t[0];
+        if (s.t[s.t.length - 1] > hi) hi = s.t[s.t.length - 1];
+      }
+      return { lo, hi, label: trps[i]?.name ?? `Session ${i + 1}` };
+    })
+    .sort((a, b) => a.lo - b.lo);
+  const sessionOf = (ts: number) => {
+    for (let k = 0; k < fileWindows.length; k++) {
+      const w = fileWindows[k];
+      if (ts >= w.lo - 1e-6 && ts <= w.hi + 1e-6) return k;
+    }
+    let best = 0;
+    let bd = Infinity;
+    for (let k = 0; k < fileWindows.length; k++) {
+      const w = fileWindows[k];
+      const d = ts < w.lo ? w.lo - ts : ts - w.hi;
+      if (d < bd) { bd = d; best = k; }
+    }
+    return best;
+  };
   const col = (name: string) => cols.find((c) => c.header === name)!;
   const S = (name: string) => series.get(col(name))!;
 
@@ -350,6 +382,7 @@ export function extract(input: Trp | Trp[], interval = 1): Dashboard {
   type NbAcc = {
     rat: string; pci: number; chan: number | null; samples: number;
     sum: number; min: number; max: number; rsrpN: number; rqSum: number; rqN: number;
+    firstTs: number; lastTs: number; session: number;
   };
   const nbMap = new Map<string, NbAcc>();
   for (const g of nbCols) {
@@ -367,13 +400,16 @@ export function extract(input: Trp | Trp[], interval = 1): Dashboard {
       const rsrp = rsrpV && rsrpV.k !== "s" ? rsrpV.n : null;
       const rsrqV = at(qs, ts);
       const rsrq = rsrqV && rsrqV.k !== "s" ? rsrqV.n : null;
-      const key = `${g.rat}:${pv.n}:${chan ?? ""}`;
+      const sess = sessionOf(ts);
+      const key = `${sess}:${g.rat}:${pv.n}:${chan ?? ""}`;
       let acc = nbMap.get(key);
       if (!acc) {
-        acc = { rat: g.rat, pci: pv.n, chan, samples: 0, sum: 0, min: Infinity, max: -Infinity, rsrpN: 0, rqSum: 0, rqN: 0 };
+        acc = { rat: g.rat, pci: pv.n, chan, samples: 0, sum: 0, min: Infinity, max: -Infinity, rsrpN: 0, rqSum: 0, rqN: 0, firstTs: ts, lastTs: ts, session: sess };
         nbMap.set(key, acc);
       }
       acc.samples++;
+      if (ts < acc.firstTs) acc.firstTs = ts;
+      if (ts > acc.lastTs) acc.lastTs = ts;
       if (rsrp != null && rsrp > -140) {
         acc.sum += rsrp;
         acc.rsrpN++;
@@ -397,13 +433,19 @@ export function extract(input: Trp | Trp[], interval = 1): Dashboard {
         band: isLte && earfcn != null ? lteBandOfEarfcn(earfcn) : null,
         freqMHz: earfcn == null ? null : isLte ? lteDownlinkMHz(earfcn) : nrDownlinkMHz(earfcn),
         samples: a.samples,
+        firstSeen: Math.round((a.firstTs - t0) * 10) / 10,
+        lastSeen: Math.round((a.lastTs - t0) * 10) / 10,
+        firstUtc: new Date(a.firstTs * 1000).toISOString().slice(11, 19),
+        lastUtc: new Date(a.lastTs * 1000).toISOString().slice(11, 19),
+        sessionIndex: a.session,
+        sessionLabel: fileWindows[a.session]?.label ?? "",
         rsrpMin: a.rsrpN ? round1(a.min) : null,
         rsrpMean: a.rsrpN ? round1(a.sum / a.rsrpN) : null,
         rsrpMax: a.rsrpN ? round1(a.max) : null,
         rsrqMean: a.rqN ? round1(a.rqSum / a.rqN) : null,
       };
     })
-    .sort((a, b) => (b.rsrpMean ?? -999) - (a.rsrpMean ?? -999));
+    .sort((a, b) => a.sessionIndex - b.sessionIndex || a.firstSeen - b.firstSeen);
 
   // LTE carrier aggregation: per-component-carrier params + MAC throughput
   const modeVal = (c: Column) => aggregate(series.get(c)!.window(t0, t1 + 1e-9), "mode", false, false);
