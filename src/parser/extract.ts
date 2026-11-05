@@ -1,7 +1,7 @@
 import { Trp, Column, process, toCsv } from "./trp";
 import { aggregate, Series } from "./series";
 import type { DV } from "./protobuf";
-import { lteDuplex, lteDownlinkMHzForBand, nrDuplex, nrDownlinkMHz } from "./bands";
+import { lteDuplex, lteDownlinkMHzForBand, lteBandOfEarfcn, lteDownlinkMHz, nrDuplex, nrDownlinkMHz } from "./bands";
 
 export type BandInfo = {
   band: number;
@@ -27,6 +27,19 @@ export type SessionInfo = {
 
 export type RadioParam = { label: string; lte: string | null; nr: string | null };
 
+export type NeighborInfo = {
+  rat: string;
+  pci: number;
+  earfcn: number | null;
+  band: number | null;
+  freqMHz: number | null;
+  samples: number;
+  rsrpMin: number | null;
+  rsrpMean: number | null;
+  rsrpMax: number | null;
+  rsrqMean: number | null;
+};
+
 export type Dashboard = {
   file: string;
   overview: {
@@ -51,6 +64,7 @@ export type Dashboard = {
   seriesMeta: { key: string; label: string; unit: string; group: string }[];
   route: { lat: number; lon: number; rsrp: number | null }[];
   handovers: { t: number; utc: string; label: string; lat: number | null; lon: number | null }[];
+  neighbors: NeighborInfo[];
   radio: RadioParam[];
   sessions: SessionInfo[];
   panels: string[];
@@ -128,7 +142,27 @@ export function extract(input: Trp | Trp[], interval = 1): Dashboard {
     c.agg = "mode";
     radioCols[k] = c;
   }
-  const all = [...cols, ...Object.values(radioCols)];
+  const NEIGHBOR = [
+    { rat: "LTE", n: 32, pci: "Radio.Lte.Neighbor[64].Pci", chan: "Radio.Lte.Neighbor[64].Earfcn", rsrp: "Radio.Lte.Neighbor[64].Rsrp", rsrq: "Radio.Lte.Neighbor[64].Rsrq" },
+    { rat: "NR", n: 16, pci: "Radio.Intersystem.NrNeighbor[32].Pci", chan: "Radio.Intersystem.NrNeighbor[32].NrArfcn", rsrp: "Radio.Intersystem.NrNeighbor[32].SsRsrp", rsrq: "Radio.Intersystem.NrNeighbor[32].SsRsrq" },
+  ];
+  const mkNb = (ie: string, i: number) => {
+    const c = new Column("_nb");
+    c.selectors = [ie];
+    c.index = i;
+    c.agg = "last";
+    return c;
+  };
+  const nbCols = NEIGHBOR.flatMap((g) =>
+    Array.from({ length: g.n }, (_, i) => ({
+      rat: g.rat,
+      pci: mkNb(g.pci, i),
+      chan: mkNb(g.chan, i),
+      rsrp: mkNb(g.rsrp, i),
+      rsrq: mkNb(g.rsrq, i),
+    }))
+  );
+  const all = [...cols, ...Object.values(radioCols), ...nbCols.flatMap((x) => [x.pci, x.chan, x.rsrp, x.rsrq])];
   let tFirst: number | null = null;
   let tLast: number | null = null;
   const evAll: [number, string][] = [];
@@ -245,6 +279,65 @@ export function extract(input: Trp | Trp[], interval = 1): Dashboard {
     });
   }
 
+  // neighbour cells: distinct (PCI, channel) observed across all array slots
+  type NbAcc = {
+    rat: string; pci: number; chan: number | null; samples: number;
+    sum: number; min: number; max: number; rsrpN: number; rqSum: number; rqN: number;
+  };
+  const nbMap = new Map<string, NbAcc>();
+  for (const g of nbCols) {
+    const ps = series.get(g.pci)!;
+    const cs = series.get(g.chan)!;
+    const rs = series.get(g.rsrp)!;
+    const qs = series.get(g.rsrq)!;
+    for (let i = 0; i < ps.t.length; i++) {
+      const pv = ps.v[i];
+      if (!pv || pv.k === "s") continue;
+      const ts = ps.t[i];
+      const chanV = at(cs, ts);
+      const chan = chanV && chanV.k !== "s" ? chanV.n : null;
+      const rsrpV = at(rs, ts);
+      const rsrp = rsrpV && rsrpV.k !== "s" ? rsrpV.n : null;
+      const rsrqV = at(qs, ts);
+      const rsrq = rsrqV && rsrqV.k !== "s" ? rsrqV.n : null;
+      const key = `${g.rat}:${pv.n}:${chan ?? ""}`;
+      let acc = nbMap.get(key);
+      if (!acc) {
+        acc = { rat: g.rat, pci: pv.n, chan, samples: 0, sum: 0, min: Infinity, max: -Infinity, rsrpN: 0, rqSum: 0, rqN: 0 };
+        nbMap.set(key, acc);
+      }
+      acc.samples++;
+      if (rsrp != null && rsrp > -140) {
+        acc.sum += rsrp;
+        acc.rsrpN++;
+        if (rsrp < acc.min) acc.min = rsrp;
+        if (rsrp > acc.max) acc.max = rsrp;
+      }
+      if (rsrq != null) {
+        acc.rqSum += rsrq;
+        acc.rqN++;
+      }
+    }
+  }
+  const neighbors: NeighborInfo[] = [...nbMap.values()]
+    .map((a) => {
+      const isLte = a.rat === "LTE";
+      const earfcn = a.chan;
+      return {
+        rat: a.rat,
+        pci: a.pci,
+        earfcn,
+        band: isLte && earfcn != null ? lteBandOfEarfcn(earfcn) : null,
+        freqMHz: earfcn == null ? null : isLte ? lteDownlinkMHz(earfcn) : nrDownlinkMHz(earfcn),
+        samples: a.samples,
+        rsrpMin: a.rsrpN ? round1(a.min) : null,
+        rsrpMean: a.rsrpN ? round1(a.sum / a.rsrpN) : null,
+        rsrpMax: a.rsrpN ? round1(a.max) : null,
+        rsrqMean: a.rqN ? round1(a.rqSum / a.rqN) : null,
+      };
+    })
+    .sort((a, b) => (b.rsrpMean ?? -999) - (a.rsrpMean ?? -999));
+
   // radio params table
   const rp = (k: string) => str(aggregate(series.get(radioCols[k])!.window(t0, t1 + 1e-9), "mode", false, false));
   const lteB = bandShare("band", "earfcn", false);
@@ -300,6 +393,7 @@ export function extract(input: Trp | Trp[], interval = 1): Dashboard {
   if (seriesMeta.some((m) => m.group === "LTE" || m.group === "NR")) panels.push("signal");
   if (seriesMeta.some((m) => m.group === "Throughput") || sessions.length) panels.push("throughput");
   if (radio.length) panels.push("radio");
+  if (neighbors.length) panels.push("neighbors");
   if (sessions.length) panels.push("sessions");
 
   const { main, sessions: sessCsv } = toCsv(trps, { fields: "auto", interval, events: "default" });
@@ -328,6 +422,7 @@ export function extract(input: Trp | Trp[], interval = 1): Dashboard {
     seriesMeta,
     route,
     handovers,
+    neighbors,
     radio,
     sessions,
     panels,
