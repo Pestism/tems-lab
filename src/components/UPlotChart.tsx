@@ -5,6 +5,34 @@ import "uplot/dist/uPlot.min.css";
 
 export type ChartSeries = { label: string; stroke: string; scale?: string };
 
+function markerPlugin(xs: number[]): uPlot.Plugin {
+  return {
+    hooks: {
+      draw: (u) => {
+        if (!xs.length) return;
+        const xmin = u.scales.x.min ?? -Infinity;
+        const xmax = u.scales.x.max ?? Infinity;
+        const ctx = u.ctx;
+        const { top, height } = u.bbox;
+        ctx.save();
+        ctx.setLineDash([3, 3]);
+        ctx.strokeStyle = "#64748b";
+        ctx.globalAlpha = 0.6;
+        ctx.lineWidth = 1;
+        for (const x of xs) {
+          if (x < xmin || x > xmax) continue;
+          const px = u.valToPos(x, "x", true);
+          ctx.beginPath();
+          ctx.moveTo(px, top);
+          ctx.lineTo(px, top + height);
+          ctx.stroke();
+        }
+        ctx.restore();
+      },
+    },
+  };
+}
+
 function minMaxPlugin(marks: { idx: number; color: string }[]): uPlot.Plugin {
   return {
     hooks: {
@@ -64,12 +92,14 @@ export default function UPlotChart({
   height = 260,
   yLabel,
   minMaxSeries,
+  markers,
 }: {
   data: (number | null)[][];
   series: ChartSeries[];
   height?: number;
   yLabel?: string;
   minMaxSeries?: number[];
+  markers?: number[];
 }) {
   const host = useRef<HTMLDivElement>(null);
   const plot = useRef<uPlot | null>(null);
@@ -87,7 +117,10 @@ export default function UPlotChart({
       scales: { x: { time: false } },
       legend: { live: true },
       cursor: { points: { size: 5 }, drag: { x: true, y: false, dist: 12, setScale: true } },
-      plugins: marks.length ? [minMaxPlugin(marks)] : [],
+      plugins: [
+        ...(marks.length ? [minMaxPlugin(marks)] : []),
+        ...(markers?.length ? [markerPlugin(markers)] : []),
+      ],
       series: [
         { label: "t (s)" },
         ...series.map((s) => ({
@@ -121,7 +154,7 @@ export default function UPlotChart({
       plot.current?.destroy();
       plot.current = null;
     };
-  }, [data, series, height, yLabel, minMaxSeries]);
+  }, [data, series, height, yLabel, minMaxSeries, markers]);
 
   return <div ref={host} className="w-full" />;
 }

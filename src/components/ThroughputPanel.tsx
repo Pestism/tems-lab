@@ -26,8 +26,18 @@ export default function ThroughputPanel({ d }: { d: Dashboard }) {
 
       {hasSeries && (
         <div className="space-y-1">
-          <UPlotChart data={chartData} series={chartSeries} yLabel="Mbps" height={240} minMaxSeries={[1]} />
-          <p className="text-xs text-muted">Drag across the chart to zoom; double-click to reset.</p>
+          <UPlotChart
+            data={chartData}
+            series={chartSeries}
+            yLabel="Mbps"
+            height={240}
+            minMaxSeries={[1]}
+            markers={d.handovers.map((h) => h.t)}
+          />
+          <p className="text-xs text-muted">
+            {d.handovers.length > 0 && `Grey dashed verticals mark ${d.handovers.length} handover${d.handovers.length > 1 ? "s" : ""}. `}
+            Drag across the chart to zoom; double-click to reset.
+          </p>
         </div>
       )}
 

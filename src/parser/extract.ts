@@ -50,6 +50,7 @@ export type Dashboard = {
   series: { t: number[]; [metric: string]: (number | null)[] };
   seriesMeta: { key: string; label: string; unit: string; group: string }[];
   route: { lat: number; lon: number; rsrp: number | null }[];
+  handovers: { t: number; utc: string; label: string; lat: number | null; lon: number | null }[];
   radio: RadioParam[];
   sessions: SessionInfo[];
   panels: string[];
@@ -130,10 +131,12 @@ export function extract(input: Trp | Trp[], interval = 1): Dashboard {
   const all = [...cols, ...Object.values(radioCols)];
   let tFirst: number | null = null;
   let tLast: number | null = null;
+  const evAll: [number, string][] = [];
   const parts = trps.map((tp) => {
-    const r = process(tp, all, null);
+    const r = process(tp, all, "all");
     if (r.tFirst !== null) tFirst = tFirst === null ? r.tFirst : Math.min(tFirst, r.tFirst);
     if (r.tLast !== null) tLast = tLast === null ? r.tLast : Math.max(tLast, r.tLast);
+    for (const e of r.events) evAll.push(e);
     return r.series;
   });
   const series = parts.length === 1 ? parts[0] : mergeSeries(parts, all);
@@ -226,6 +229,22 @@ export function extract(input: Trp | Trp[], interval = 1): Dashboard {
     route.push({ lat: lat.n, lon: lon.n, rsrp: num(at(rsrpS, latS.t[i])) });
   }
 
+  // handovers: serving-cell changes / handover events, clustered within 1 s
+  const HO_RX = /Handover|ServingCellChanged|SecondaryCellReplacement/i;
+  const handovers: Dashboard["handovers"] = [];
+  let lastHo = -Infinity;
+  for (const [ts, name] of evAll.filter(([, n]) => HO_RX.test(n)).sort((a, b) => a[0] - b[0])) {
+    if (ts - lastHo < 1) continue;
+    lastHo = ts;
+    handovers.push({
+      t: Math.round((ts - t0) * 1000) / 1000,
+      utc: new Date(ts * 1000).toISOString().slice(11, 23),
+      label: name,
+      lat: num(at(latS, ts)),
+      lon: num(at(lonS, ts)),
+    });
+  }
+
   // radio params table
   const rp = (k: string) => str(aggregate(series.get(radioCols[k])!.window(t0, t1 + 1e-9), "mode", false, false));
   const lteB = bandShare("band", "earfcn", false);
@@ -308,6 +327,7 @@ export function extract(input: Trp | Trp[], interval = 1): Dashboard {
     series: seriesOut,
     seriesMeta,
     route,
+    handovers,
     radio,
     sessions,
     panels,

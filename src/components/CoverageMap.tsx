@@ -44,6 +44,18 @@ export default function CoverageMap({ d }: { d: Dashboard }) {
               <Tooltip>{`RSRP ${num(p.rsrp, 1, " dBm")}`}</Tooltip>
             </CircleMarker>
           ))}
+          {d.handovers.map((h, i) =>
+            h.lat != null && h.lon != null ? (
+              <CircleMarker
+                key={`ho-${i}`}
+                center={[h.lat, h.lon]}
+                radius={8}
+                pathOptions={{ color: "#111827", fillColor: "#ffffff", fillOpacity: 0.9, weight: 2 }}
+              >
+                <Tooltip>{`Handover · ${h.label} · ${h.utc}`}</Tooltip>
+              </CircleMarker>
+            ) : null
+          )}
           <Fit bounds={bounds} />
         </MapContainer>
       </div>
@@ -55,6 +67,12 @@ export default function CoverageMap({ d }: { d: Dashboard }) {
             {l.label}
           </span>
         ))}
+        {d.handovers.some((h) => h.lat != null) && (
+          <span className="inline-flex items-center gap-1">
+            <span className="inline-block h-3 w-3 rounded-full border-2 border-black bg-white" />
+            handover
+          </span>
+        )}
       </div>
       <p className="text-xs text-muted">
         Each dot is a GPS sample 

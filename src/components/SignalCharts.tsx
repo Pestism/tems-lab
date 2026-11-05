@@ -26,6 +26,7 @@ export default function SignalCharts({ d }: { d: Dashboard }) {
   const groups = GROUPS.map((g) => ({ ...g, keys: g.keys.filter((k) => present.has(k)) })).filter(
     (g) => g.keys.length
   );
+  const ho = d.handovers.map((h) => h.t);
 
   return (
     <div className="space-y-3">
@@ -42,14 +43,15 @@ export default function SignalCharts({ d }: { d: Dashboard }) {
               yLabel={g.unit}
               height={240}
               minMaxSeries={g.keys.map((_, i) => i + 1)}
+              markers={ho}
             />
           </div>
         );
       })}
       </div>
       <p className="text-xs text-muted">
-        Read values off the axis. Drag across a chart to zoom;
-        double-click to reset.
+        {ho.length > 0 && `Grey dashed verticals mark ${ho.length} handover${ho.length > 1 ? "s" : ""}. `}
+        Read values off the axis. Drag across a chart to zoom; double-click to reset.
       </p>
     </div>
   );
