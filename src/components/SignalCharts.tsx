@@ -49,10 +49,15 @@ export default function SignalCharts({ d }: { d: Dashboard }) {
         );
       })}
       </div>
-      <p className="text-xs text-muted">
-        {ho.length > 0 && `Grey dashed verticals mark ${ho.length} handover${ho.length > 1 ? "s" : ""}. `}
-        Read values off the axis. Drag across a chart to zoom; double-click to reset.
-      </p>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted">
+        {ho.length > 0 && (
+          <span className="inline-flex items-center gap-1.5">
+            <span className="inline-block w-5 border-t border-dashed" style={{ borderColor: "#64748b" }} />
+            handover
+          </span>
+        )}
+        <span>Read values off the axis. Drag across a chart to zoom; double-click to reset.</span>
+      </div>
     </div>
   );
 }

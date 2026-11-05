@@ -1,6 +1,6 @@
 "use client";
 import type { Dashboard } from "@/parser/extract";
-import { num, bytes } from "@/lib/format";
+import { num } from "@/lib/format";
 
 function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
@@ -22,7 +22,7 @@ export default function Overview({ d }: { d: Dashboard }) {
       <Stat label="Technology" value={o.technology ?? "–"} />
       <Stat label="LTE bands" value={lte} sub={o.lteBands.map((b) => (b.freqMHz ? `${b.freqMHz} MHz` : `B${b.band}`)).join(", ") || undefined} />
       <Stat label="NR bands" value={nr} />
-      <Stat label="Data downloaded" value={bytes(o.downloadBytes)} />
+      <Stat label="Handovers occurred" value={String(d.handovers.length)} />
       <Stat label="Mean RSRP" value={num(o.meanRsrp, 1, " dBm")} sub={`median ${num(o.medianRsrp, 1)}`} />
       <Stat label="Downloads" value={String(o.downloads)} sub="HTTP sessions" />
       <Stat label="Route" value={`${num(o.durationS, 0, " s")}`} sub={`${o.routePoints} GPS points`} />

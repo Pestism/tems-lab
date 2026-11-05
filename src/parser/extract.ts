@@ -75,7 +75,7 @@ export type Dashboard = {
   series: { t: number[]; [metric: string]: (number | null)[] };
   seriesMeta: { key: string; label: string; unit: string; group: string }[];
   route: { lat: number; lon: number; rsrp: number | null }[];
-  handovers: { t: number; utc: string; label: string; lat: number | null; lon: number | null }[];
+  handovers: { t: number; utc: string; labels: string[]; lat: number | null; lon: number | null; rsrp: number | null }[];
   neighbors: NeighborInfo[];
   carriers: CarrierInfo[];
   caDegree: number | null;
@@ -305,14 +305,19 @@ export function extract(input: Trp | Trp[], interval = 1): Dashboard {
   const handovers: Dashboard["handovers"] = [];
   let lastHo = -Infinity;
   for (const [ts, name] of evAll.filter(([, n]) => HO_RX.test(n)).sort((a, b) => a[0] - b[0])) {
-    if (ts - lastHo < 1) continue;
+    if (handovers.length && ts - lastHo < 1) {
+      const prev = handovers[handovers.length - 1];
+      if (!prev.labels.includes(name)) prev.labels.push(name);
+      continue;
+    }
     lastHo = ts;
     handovers.push({
       t: Math.round((ts - t0) * 1000) / 1000,
       utc: new Date(ts * 1000).toISOString().slice(11, 23),
-      label: name,
+      labels: [name],
       lat: num(at(latS, ts)),
       lon: num(at(lonS, ts)),
+      rsrp: num(at(rsrpS, ts)),
     });
   }
 
@@ -413,14 +418,27 @@ export function extract(input: Trp | Trp[], interval = 1): Dashboard {
   }
   const caDegree = series.get(caCountCol)!.v.reduce((m: number, v) => (v && v.k !== "s" ? Math.max(m, v.n) : m), 0) || null;
 
+  // LTE bands come from all component carriers (serving-cell index 0 = PCell only)
+  const lteBands: BandInfo[] = carriers.length
+    ? (() => {
+        const seen = new Set<number>();
+        const out: BandInfo[] = [];
+        for (const c of carriers) {
+          if (c.band == null || seen.has(c.band)) continue;
+          seen.add(c.band);
+          out.push({ band: c.band, earfcn: c.earfcn, freqMHz: c.freqMHz, bandwidthMHz: null, duplex: lteDuplex(c.band), sharePct: 0 });
+        }
+        return out;
+      })()
+    : bandShare("band", "earfcn", false);
+  const nrBands = bandShare("nr_band", "nr_arfcn", true);
+
   // radio params table
   const rp = (k: string) => str(aggregate(series.get(radioCols[k])!.window(t0, t1 + 1e-9), "mode", false, false));
-  const lteB = bandShare("band", "earfcn", false);
-  const nrB = bandShare("nr_band", "nr_arfcn", true);
   const radio: RadioParam[] = [
-    { label: "Bands", lte: bandList(lteB, false), nr: bandList(nrB, true) },
+    { label: "Bands", lte: bandList(lteBands, false), nr: bandList(nrBands, true) },
     { label: "Bandwidth", lte: fmtBw(rp("bw")), nr: fmtBw(rp("nr_bw")) },
-    { label: "Duplex mode", lte: duplexList(lteB), nr: duplexList(nrB) },
+    { label: "Duplex mode", lte: duplexList(lteBands), nr: duplexList(nrBands) },
     { label: "Modulation", lte: fmtMod(rp("modulation")), nr: fmtMod(rp("nr_mod")) },
     { label: "MIMO", lte: rp("mimo"), nr: rp("nr_mimo") },
     { label: "Rank indicator", lte: fmtRank(rp("rank")), nr: fmtRank(rp("nr_rank")) },
@@ -455,9 +473,6 @@ export function extract(input: Trp | Trp[], interval = 1): Dashboard {
       url: g("DownloadedUrl") ?? "",
     };
   });
-
-  const lteBands = bandShare("band", "earfcn", false);
-  const nrBands = bandShare("nr_band", "nr_arfcn", true);
 
   const seriesMeta = CHART_METRICS.filter((m) => seriesOut[m.key].some((v) => v !== null)).map(
     ({ key, label, unit, group }) => ({ key, label, unit, group })

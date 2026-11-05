@@ -21,7 +21,7 @@ describe("extract() dashboard", () => {
     expect(d.overview.operator).toBe("Telia");
     expect(d.overview.downloads).toBe(10);
     expect(d.overview.routePoints).toBe(227);
-    expect(d.overview.lteBands.map((b) => b.band).sort((a, b) => a - b)).toEqual([7, 20]);
+    expect(d.overview.lteBands.map((b) => b.band).sort((a, b) => a - b)).toEqual([3, 7, 20]);
     const b7 = d.overview.lteBands.find((b) => b.band === 7)!;
     const b20 = d.overview.lteBands.find((b) => b.band === 20)!;
     expect(b7.earfcn).toBe(3150);

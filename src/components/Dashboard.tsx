@@ -39,8 +39,7 @@ export default function Dashboard({ d, onReset }: { d: DashboardData; onReset: (
       t.push({ id: "throughput", label: "Throughput", hint: "4G / 5G downlink throughput" });
     if (d.panels.includes("radio"))
       t.push({ id: "radio", label: "Radio params", hint: "Radio parameters observed during the test, including LTE and 5G configuration details" });
-    if (d.panels.includes("carriers"))
-      t.push({ id: "carriers", label: "Carriers", hint: "LTE carrier aggregation: per-component-carrier band, bandwidth and throughput" });
+    if (d.panels.includes("carriers")) t.push({ id: "carriers", label: "Carriers" });
     if (d.panels.includes("neighbors"))
       t.push({ id: "neighbors", label: "Neighbours", hint: "Neighbour cells (by PCI + frequency) measured during the walk, with their RSRP/RSRQ" });
     if (d.panels.includes("sessions"))

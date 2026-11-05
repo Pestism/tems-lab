@@ -38,7 +38,11 @@ export default function NeighborsTable({ d }: { d: Dashboard }) {
                   </span>
                 </td>
                 <td className="border-b border-line py-2 pr-4 tabular-nums text-muted">
-                  {c.rsrpMin != null ? `${num(c.rsrpMin, 1)}…${num(c.rsrpMax, 1)}` : "–"}
+                  {c.rsrpMin == null
+                    ? "–"
+                    : c.rsrpMin === c.rsrpMax
+                      ? num(c.rsrpMin, 1)
+                      : `${num(c.rsrpMin, 1)}-${num(c.rsrpMax, 1)}`}
                 </td>
                 <td className="border-b border-line py-2 tabular-nums">{num(c.rsrqMean, 1, " dB")}</td>
               </tr>
@@ -46,10 +50,6 @@ export default function NeighborsTable({ d }: { d: Dashboard }) {
           </tbody>
         </table>
       </div>
-      <p className="text-xs text-muted">
-        Every distinct neighbour cell (by PCI + frequency) seen during the walk, strongest first. Neighbours are
-        identified by PCI; a full global Cell ID is only broadcast for the serving cell.
-      </p>
     </div>
   );
 }
