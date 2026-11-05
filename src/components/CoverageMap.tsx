@@ -103,6 +103,16 @@ function HandoverModal({ h, index, onClose }: { h: Handover; index: number; onCl
     </div>
   );
 
+  const change = (from: number | null, to: number | null, pre = ""): string | null => {
+    if (from == null && to == null) return null;
+    if (from == null || to == null || from === to) return `${pre}${to ?? from}`;
+    return `${pre}${from} → ${pre}${to}`;
+  };
+  const ltePci = change(h.pciFrom, h.pciTo);
+  const lteBand = change(h.bandFrom, h.bandTo, "B");
+  const nrPci = change(h.nrPciFrom, h.nrPciTo);
+  const nrBand = change(h.nrBandFrom, h.nrBandTo, "n");
+
   return (
     <div
       className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/50 p-4"
@@ -128,6 +138,10 @@ function HandoverModal({ h, index, onClose }: { h: Handover; index: number; onCl
           <Row k="Time (UTC)" v={h.utc} />
           <Row k="At" v={`${num(h.t, 1)} s into the walk`} />
           <Row k="Event(s)" v={h.labels.join(", ")} />
+          {ltePci && <Row k="LTE cell (PCI)" v={ltePci} />}
+          {lteBand && <Row k="LTE band" v={lteBand} />}
+          {nrPci && <Row k="NR cell (PCI)" v={nrPci} />}
+          {nrBand && <Row k="NR band" v={nrBand} />}
           <Row k="Position" v={h.lat != null && h.lon != null ? `${h.lat.toFixed(5)}, ${h.lon.toFixed(5)}` : "–"} />
           <Row k="RSRP here" v={num(h.rsrp, 1, " dBm")} />
         </div>

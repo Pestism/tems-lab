@@ -75,7 +75,22 @@ export type Dashboard = {
   series: { t: number[]; [metric: string]: (number | null)[] };
   seriesMeta: { key: string; label: string; unit: string; group: string }[];
   route: { lat: number; lon: number; rsrp: number | null }[];
-  handovers: { t: number; utc: string; labels: string[]; lat: number | null; lon: number | null; rsrp: number | null }[];
+  handovers: {
+    t: number;
+    utc: string;
+    labels: string[];
+    lat: number | null;
+    lon: number | null;
+    rsrp: number | null;
+    pciFrom: number | null;
+    pciTo: number | null;
+    bandFrom: number | null;
+    bandTo: number | null;
+    nrPciFrom: number | null;
+    nrPciTo: number | null;
+    nrBandFrom: number | null;
+    nrBandTo: number | null;
+  }[];
   neighbors: NeighborInfo[];
   carriers: CarrierInfo[];
   caDegree: number | null;
@@ -311,6 +326,8 @@ export function extract(input: Trp | Trp[], interval = 1): Dashboard {
       continue;
     }
     lastHo = ts;
+    const before = (n: string) => at(S(n), ts - 1);
+    const after = (n: string) => at(S(n), ts + 2);
     handovers.push({
       t: Math.round((ts - t0) * 1000) / 1000,
       utc: new Date(ts * 1000).toISOString().slice(11, 23),
@@ -318,6 +335,14 @@ export function extract(input: Trp | Trp[], interval = 1): Dashboard {
       lat: num(at(latS, ts)),
       lon: num(at(lonS, ts)),
       rsrp: num(at(rsrpS, ts)),
+      pciFrom: num(before("pci")),
+      pciTo: num(after("pci")),
+      bandFrom: bandNum(before("band")),
+      bandTo: bandNum(after("band")),
+      nrPciFrom: num(before("nr_pci")),
+      nrPciTo: num(after("nr_pci")),
+      nrBandFrom: bandNum(before("nr_band")),
+      nrBandTo: bandNum(after("nr_band")),
     });
   }
 
