@@ -105,7 +105,7 @@ function HandoverModal({ h, index, onClose }: { h: Handover; index: number; onCl
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/50 p-4"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
